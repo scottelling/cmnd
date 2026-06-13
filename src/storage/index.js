@@ -75,3 +75,42 @@ export const useDebouncedSave = (key, data, ready, delay = 600) => {
     return () => clearTimeout(timer.current);
   }, [key, data, ready, delay]);
 };
+
+/* ── backend activation + cross-device sync (used by the sign-in flow) ──
+   The nine prefixed keys the app persists. When the backend swaps (sign in / out),
+   we bump an "epoch" so the app re-hydrates its state from the new backend. */
+export const STATE_KEYS = [
+  "theme", "layout", "minimized", "railOpen", "outlines", "threads", "events",
+  "activeOutline", "activeThread",
+].map(SK);
+
+let _epoch = 0;
+const _epochSubs = new Set();
+export const storageEpoch = () => _epoch;
+export const onStorageEpoch = (cb) => { _epochSubs.add(cb); return () => _epochSubs.delete(cb); };
+const bumpEpoch = () => { _epoch += 1; _epochSubs.forEach((cb) => { try { cb(_epoch); } catch (e) { /* ignore */ } }); };
+
+// One-time seed: for any key the cloud doesn't have yet, push the local value up.
+// Cloud wins where it already has a value, so a second device doesn't clobber it.
+const seedCloudFromLocal = async (cloud) => {
+  for (const key of STATE_KEYS) {
+    try {
+      const remote = await cloud.get(key);
+      if (remote && remote.value != null) continue;
+      const local = await localBackend.get(key);
+      if (local && local.value != null) await cloud.set(key, local.value);
+    } catch (e) { /* best-effort */ }
+  }
+};
+
+// Switch to the per-user Supabase backend (after seeding) and re-hydrate the app.
+export const activateSupabaseBackend = async (userId) => {
+  if (!supabase || !userId) return;
+  const cloud = makeSupabaseBackend(supabase, userId);
+  await seedCloudFromLocal(cloud);
+  setBackend(cloud);
+  bumpEpoch();
+};
+
+// Revert to localStorage (sign-out) and re-hydrate from local.
+export const resetToLocalBackend = () => { setBackend(localBackend); bumpEpoch(); };

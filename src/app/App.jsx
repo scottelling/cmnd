@@ -3,7 +3,8 @@ import {
   Settings, Plus, X, Layers, PanelLeftClose, PanelLeftOpen, Sun, Moon, Check,
 } from "lucide-react";
 import { SANS, HUMAN, MONO, EASE, THEMES, ROLES, ROLE_ORDER, DEFAULT_MODEL } from "../design/tokens.js";
-import { SK, loadKey, useDebouncedSave } from "../storage/index.js";
+import { SK, loadKey, useDebouncedSave, onStorageEpoch } from "../storage/index.js";
+import { useAuth } from "../lib/useAuth.js";
 import { materialize, newNodeId } from "../lib/tree.js";
 import { nextBid } from "../lib/artifacts.js";
 import { Dot } from "../ui/Dot.jsx";
@@ -43,6 +44,8 @@ export default function App() {
   const [fullscreen, setFullscreen] = useState(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [webSearch, setWebSearch] = useState(true);
+  const auth = useAuth();
+  const [authEmail, setAuthEmail] = useState("");
   const [railOpen, setRailOpen] = useState({ secondbrain: false, chat: false });
 
   const [outlines, setOutlines] = useState(seedOutlines);
@@ -58,13 +61,14 @@ export default function App() {
   const toastTimer = useRef(null);
   const showToast = useCallback((m) => { setToast(m); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), 2400); }, []);
 
-  useEffect(() => { (async () => {
+  const hydrate = useCallback(async () => {
+    setReady(false);
     const [th, lay, mn, ro, ol, tr, ev, ao, at] = await Promise.all([
       loadKey(SK("theme"), "dark"), loadKey(SK("layout"), null), loadKey(SK("minimized"), []), loadKey(SK("railOpen"), null),
       loadKey(SK("outlines"), null), loadKey(SK("threads"), null), loadKey(SK("events"), null),
       loadKey(SK("activeOutline"), null), loadKey(SK("activeThread"), null),
     ]);
-    setTheme(th);
+    setTheme(th || "dark");
     if (Array.isArray(lay) && lay.length) setPanels(lay);
     if (Array.isArray(mn)) setMinimized(mn);
     if (ro && typeof ro === "object") setRailOpen({ secondbrain: !!ro.secondbrain, chat: !!ro.chat });
@@ -74,7 +78,10 @@ export default function App() {
     if (ao) setActiveOutlineId(ao);
     if (at) setActiveThreadId(at);
     setReady(true);
-  })(); }, []);
+  }, []);
+  // Hydrate on boot, and again whenever the storage backend swaps (sign in / out).
+  useEffect(() => { hydrate(); }, [hydrate]);
+  useEffect(() => onStorageEpoch(() => { hydrate(); }), [hydrate]);
 
   useDebouncedSave(SK("theme"), theme, ready);
   useDebouncedSave(SK("layout"), panels, ready);
@@ -313,6 +320,31 @@ export default function App() {
               <div style={{ marginTop: 18, fontFamily: MONO, fontSize: 10.5, color: t.textFaint, lineHeight: 1.6 }}>
                 Removing a panel only hides the view. Its data is preserved and reattaches when you add it back.
               </div>
+
+              {auth.configured && (
+                <>
+                  <div style={{ marginTop: 26, fontFamily: MONO, fontSize: 10, color: t.textMute, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 12 }}>Account</div>
+                  {auth.user ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, padding: "13px 14px", borderRadius: 12, background: t.surface2 }}>
+                      <div style={{ fontFamily: SANS, fontSize: 13, color: t.text }}>Signed in as <span style={{ fontWeight: 700 }}>{auth.user.email}</span></div>
+                      <div style={{ fontFamily: MONO, fontSize: 10.5, color: t.textMute }}>Synced to your account across devices.</div>
+                      <button onClick={auth.signOut} style={{ alignSelf: "flex-start", padding: "8px 14px", borderRadius: 9, border: "none", background: `${t.danger}1f`, color: t.danger, fontFamily: SANS, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>Sign out</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <input value={authEmail} onChange={(e) => { setAuthEmail(e.target.value); auth.setSent(false); }} placeholder="you@email.com" type="email" autoComplete="email" inputMode="email"
+                        style={{ width: "100%", padding: "12px 14px", borderRadius: 12, border: "none", background: t.surface2, color: t.text, fontFamily: SANS, outline: "none" }} />
+                      <button onClick={() => auth.signIn(authEmail.trim())} disabled={auth.sending || !authEmail.trim()}
+                        style={{ padding: "11px 14px", borderRadius: 12, border: "none", background: `${t.accent}1f`, color: t.accent, fontFamily: SANS, fontSize: 13, fontWeight: 700, cursor: auth.sending ? "default" : "pointer", opacity: (auth.sending || !authEmail.trim()) ? 0.5 : 1 }}>
+                        {auth.sending ? "Sending…" : "Send magic link"}
+                      </button>
+                      {auth.sent && <div style={{ fontFamily: MONO, fontSize: 10.5, color: t.agent }}>Check your email for a sign-in link.</div>}
+                      {auth.error && <div style={{ fontFamily: MONO, fontSize: 10.5, color: t.danger }}>{auth.error}</div>}
+                      <div style={{ fontFamily: MONO, fontSize: 10.5, color: t.textFaint, lineHeight: 1.6 }}>Sign in to sync across devices. Your local data uploads on first sign-in.</div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
