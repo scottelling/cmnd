@@ -173,6 +173,22 @@ export default function App() {
     window.addEventListener("resize", measure);
     return () => { if (ro) ro.disconnect(); window.removeEventListener("resize", measure); };
   }, []);
+
+  // Faster left/right panel scrolling: amplify horizontal-intent wheel/trackpad
+  // deltas (and shift+wheel) into the row. Vertical scrolling inside panels is
+  // left untouched, so it never hijacks the outline/chat lists.
+  useEffect(() => {
+    const el = rowRef.current; if (!el) return undefined;
+    const onWheel = (e) => {
+      const horiz = e.shiftKey ? e.deltaY : (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : 0);
+      if (!horiz) return;
+      e.preventDefault();
+      el.scrollLeft += horiz * 1.6;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
   const avail = (containerW || (typeof window !== "undefined" ? window.innerWidth : 1200)) - 28;
   const fitWidth = (w) => avail > 120 ? Math.min(w, avail) : w;
 
@@ -231,7 +247,7 @@ export default function App() {
           <span style={{ fontFamily: SANS, fontSize: 18, fontWeight: 800, color: t.accent, letterSpacing: "0.05em" }}>CMND</span>
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Dot color={t.agent} pulse /><span style={{ fontFamily: MONO, fontSize: 10.5, color: t.agent, letterSpacing: "0.06em" }}>LIVE</span></div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative" }}>
             <IconBtn t={t} onClick={() => setAddMenu(v => !v)} title="Add a panel" active={addMenu}><Plus size={19} /></IconBtn>
             {addMenu && <>
