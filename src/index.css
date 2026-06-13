@@ -9,7 +9,12 @@ body,
   width: 100%;
 }
 
+html,
 body {
+  /* Lock the page itself — the app root owns its own height (100dvh) so the panel
+     bottoms (composers) always sit inside the visible viewport on mobile, never
+     scrolled away behind the browser chrome. */
+  overflow: hidden;
   /* Prevent rubber-band scroll behind the fixed panel row. */
   overscroll-behavior: none;
   background: #0c0c11;

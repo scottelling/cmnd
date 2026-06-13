@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  Settings, Plus, X, Layers, PanelLeftClose, PanelLeftOpen, Sun, Moon, Check,
+  Settings, Plus, X, Layers, PanelLeftClose, PanelLeftOpen, Sun, Moon, Check, Code2,
 } from "lucide-react";
 import { SANS, HUMAN, MONO, EASE, THEMES, ROLES, ROLE_ORDER, DEFAULT_MODEL } from "../design/tokens.js";
 import { SK, loadKey, useDebouncedSave, onStorageEpoch } from "../storage/index.js";
@@ -58,6 +58,7 @@ export default function App() {
   const [saveTarget, setSaveTarget] = useState(null);
   const [toast, setToast] = useState(null);
   const [sandbox, setSandbox] = useState(null); // { code, mode } | null
+  const [addMenu, setAddMenu] = useState(false); // top-bar "add a panel" popover
   const toastTimer = useRef(null);
   const showToast = useCallback((m) => { setToast(m); clearTimeout(toastTimer.current); toastTimer.current = setTimeout(() => setToast(null), 2400); }, []);
 
@@ -176,9 +177,11 @@ export default function App() {
   const fitWidth = (w) => avail > 120 ? Math.min(w, avail) : w;
 
   const visiblePanels = panels.filter(p => !minimized.includes(p.role));
-  const removedRoles = ROLE_ORDER.filter(r => !panels.find(p => p.role === r));
 
   const runInSandbox = ({ code, mode }) => setSandbox({ code, mode });
+  const openSandbox = () => setSandbox({ code: "", mode: "auto" });
+  // Panels not currently on screen (removed OR minimized) — the top-bar + adds these.
+  const addableRoles = ROLE_ORDER.filter(r => !visiblePanels.find(p => p.role === r));
 
   const renderPanelContent = (role) => {
     const accent = t[ROLES[role].accentKey];
@@ -207,7 +210,7 @@ export default function App() {
   const fsRole = fullscreen && panels.find(p => p.role === fullscreen) ? fullscreen : null;
 
   return (
-    <div style={{ width: "100vw", height: "100vh", background: t.bg, display: "flex", flexDirection: "column", fontFamily: SANS, color: t.text, overflow: "hidden" }}>
+    <div style={{ width: "100vw", height: "100dvh", background: t.bg, display: "flex", flexDirection: "column", fontFamily: SANS, color: t.text, overflow: "hidden", paddingBottom: "env(safe-area-inset-bottom)" }}>
       <style>{`
         * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
         input, textarea, select { font-size: 16px; }
@@ -229,6 +232,25 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 5 }}><Dot color={t.agent} pulse /><span style={{ fontFamily: MONO, fontSize: 10.5, color: t.agent, letterSpacing: "0.06em" }}>LIVE</span></div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <div style={{ position: "relative" }}>
+            <IconBtn t={t} onClick={() => setAddMenu(v => !v)} title="Add a panel" active={addMenu}><Plus size={19} /></IconBtn>
+            {addMenu && <>
+              <div onClick={() => setAddMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 5 }} />
+              <div style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, minWidth: 196, background: t.surface, borderRadius: 12, overflow: "hidden", boxShadow: t.shadow, zIndex: 6, padding: 4 }}>
+                {addableRoles.length === 0
+                  ? <div style={{ padding: "10px 12px", fontFamily: MONO, fontSize: 11.5, color: t.textMute }}>All panels open</div>
+                  : addableRoles.map(role => { const meta = ROLES[role]; const accent = t[meta.accentKey]; const isMin = minimized.includes(role); return (
+                      <button key={role} onClick={() => { ensurePanel(role); setAddMenu(false); }} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "9px 11px", border: "none", borderRadius: 9, background: "transparent", cursor: "pointer", textAlign: "left" }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = t.hover} onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}>
+                        <span style={{ width: 24, height: 24, borderRadius: 7, background: `${accent}1f`, display: "flex", alignItems: "center", justifyContent: "center", color: accent, flexShrink: 0 }}><meta.Icon size={14} /></span>
+                        <span style={{ flex: 1, fontFamily: HUMAN, fontSize: 13.5, color: t.text }}>{meta.label}</span>
+                        <span style={{ fontFamily: MONO, fontSize: 10, color: t.textMute }}>{isMin ? "restore" : "add"}</span>
+                      </button>
+                    ); })}
+              </div>
+            </>}
+          </div>
+          <IconBtn t={t} onClick={openSandbox} title="Live Sandbox"><Code2 size={18} /></IconBtn>
           <IconBtn t={t} onClick={() => setTheme(m => m === "dark" ? "light" : "dark")} title={theme === "dark" ? "Switch to light" : "Switch to dark"}>{theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}</IconBtn>
           <IconBtn t={t} onClick={() => setSettingsOpen(true)} title="Settings"><Settings size={18} /></IconBtn>
         </div>
@@ -256,12 +278,6 @@ export default function App() {
             </div>
           );
         })}
-        {removedRoles.length > 0 && visiblePanels.length > 0 && (
-          <button onClick={() => setSettingsOpen(true)} title="Add a panel" style={{ minWidth: 80, height: "100%", borderRadius: 16, border: "none", background: t.surface2, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", opacity: 0.7, transition: "opacity .15s" }}
-            onMouseEnter={(e) => e.currentTarget.style.opacity = "1"} onMouseLeave={(e) => e.currentTarget.style.opacity = "0.7"}>
-            <Plus size={26} color={t.textMute} />
-          </button>
-        )}
       </div>
 
       {minimized.length > 0 && (
