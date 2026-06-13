@@ -1,0 +1,29 @@
+/* Global reset. The app shell is inline-styled with the Purple Rain token object;
+   only viewport-level resets and the iOS focus-zoom guard live here. */
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  /* Prevent rubber-band scroll behind the fixed panel row. */
+  overscroll-behavior: none;
+  background: #0c0c11;
+}
+
+/* All editable text >= 16px — prevents iOS Safari focus-zoom. The app re-asserts
+   this inside its themed <style> block too; kept here so it holds before mount. */
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+  box-sizing: border-box;
+}
